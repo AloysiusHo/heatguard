@@ -1,0 +1,884 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HeatGuard — Wearable Heat Stress Monitoring</title>
+<style>
+
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:        #0B0F0E;
+    --surface:   #141918;
+    --card:      #1C2220;
+    --border:    #2A3330;
+    --heat-red:  #FF4B2B;
+    --heat-org:  #FF8C42;
+    --safe-grn:  #2ECC71;
+    --warn-ylw:  #F5C518;
+    --text:      #E8EDE8;
+    --muted:     #7A9088;
+    --accent:    #00E5B0;
+    --mono: 'Courier New', Courier, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 16px;
+    line-height: 1.6;
+    overflow-x: hidden;
+  }
+
+  /* ── NAV ── */
+  nav {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 1rem 2.5rem;
+    background: rgba(11,15,14,0.85);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--border);
+  }
+  .nav-logo { font-family: var(--mono); font-size: 1.1rem; color: var(--accent); letter-spacing: 0.05em; }
+  .nav-links { display: flex; gap: 2rem; list-style: none; }
+  .nav-links a { color: var(--muted); text-decoration: none; font-size: 0.875rem; letter-spacing: 0.03em; transition: color 0.2s; }
+  .nav-links a:hover { color: var(--text); }
+  .nav-cta {
+    background: var(--accent); color: #0B0F0E; border: none;
+    padding: 0.5rem 1.25rem; border-radius: 4px;
+    font-family: var(--sans); font-weight: 600; font-size: 0.875rem;
+    cursor: pointer; transition: opacity 0.2s;
+  }
+  .nav-cta:hover { opacity: 0.85; }
+
+  /* ── HERO ── */
+  .hero {
+    min-height: 100vh;
+    display: flex; align-items: center;
+    padding: 8rem 2.5rem 4rem;
+    position: relative; overflow: hidden;
+  }
+  .hero::before {
+    content: '';
+    position: absolute; top: -200px; right: -200px;
+    width: 700px; height: 700px; border-radius: 50%;
+    background: radial-gradient(circle, rgba(255,75,43,0.12) 0%, transparent 70%);
+    pointer-events: none;
+  }
+  .hero-inner { max-width: 1200px; margin: 0 auto; display: grid; grid-template-columns: 1fr 1fr; gap: 4rem; align-items: center; width: 100%; }
+  .hero-eyebrow { font-family: var(--mono); font-size: 0.75rem; color: var(--accent); letter-spacing: 0.12em; text-transform: uppercase; margin-bottom: 1.5rem; }
+  .hero-title { font-size: clamp(2.5rem, 5vw, 4.5rem); font-weight: 700; line-height: 1.05; letter-spacing: -0.02em; }
+  .hero-title .heat { color: var(--heat-red); }
+  .hero-sub { margin-top: 1.5rem; color: var(--muted); font-size: 1.15rem; max-width: 480px; line-height: 1.7; }
+  .hero-actions { display: flex; gap: 1rem; margin-top: 2.5rem; flex-wrap: wrap; }
+  .btn-primary {
+    background: var(--heat-red); color: #fff; border: none;
+    padding: 0.85rem 2rem; border-radius: 4px;
+    font-family: var(--sans); font-weight: 600; font-size: 1rem;
+    cursor: pointer; transition: background 0.2s;
+  }
+  .btn-primary:hover { background: #e03520; }
+  .btn-outline {
+    background: transparent; color: var(--text);
+    border: 1px solid var(--border); padding: 0.85rem 2rem; border-radius: 4px;
+    font-family: var(--sans); font-weight: 500; font-size: 1rem;
+    cursor: pointer; transition: border-color 0.2s;
+  }
+  .btn-outline:hover { border-color: var(--muted); }
+
+  /* ── LIVE DASHBOARD MOCK ── */
+  .dashboard-mock {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.5rem;
+    position: relative;
+  }
+  .mock-topbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.25rem; }
+  .mock-title { font-family: var(--mono); font-size: 0.7rem; color: var(--muted); letter-spacing: 0.1em; }
+  .live-dot { display: flex; align-items: center; gap: 0.4rem; font-family: var(--mono); font-size: 0.7rem; color: var(--safe-grn); }
+  .live-dot::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: var(--safe-grn); animation: pulse 1.6s ease-in-out infinite; }
+  @keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:0.5;transform:scale(1.3)} }
+
+  .worker-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.75rem; }
+  .worker-card {
+    background: var(--card); border-radius: 8px; padding: 0.85rem;
+    border-left: 3px solid transparent;
+    transition: transform 0.2s;
+  }
+  .worker-card:hover { transform: translateY(-2px); }
+  .worker-card.safe   { border-left-color: var(--safe-grn); }
+  .worker-card.warn   { border-left-color: var(--warn-ylw); }
+  .worker-card.danger { border-left-color: var(--heat-red); animation: flash-border 1s ease-in-out infinite; }
+  @keyframes flash-border { 0%,100%{border-left-color: var(--heat-red)} 50%{border-left-color: rgba(255,75,43,0.3)} }
+
+  .worker-name { font-size: 0.7rem; color: var(--muted); font-family: var(--mono); margin-bottom: 0.4rem; }
+  .worker-temp { font-size: 1.4rem; font-weight: 700; font-family: var(--mono); line-height: 1; }
+  .worker-card.safe   .worker-temp { color: var(--safe-grn); }
+  .worker-card.warn   .worker-temp { color: var(--warn-ylw); }
+  .worker-card.danger .worker-temp { color: var(--heat-red); }
+  .worker-status { font-size: 0.65rem; margin-top: 0.3rem; color: var(--muted); }
+
+  .alert-bar {
+    margin-top: 1rem;
+    background: rgba(255,75,43,0.12); border: 1px solid rgba(255,75,43,0.3);
+    border-radius: 6px; padding: 0.6rem 0.9rem;
+    display: flex; align-items: center; gap: 0.6rem;
+    font-size: 0.75rem; color: var(--heat-red); font-family: var(--mono);
+  }
+  .alert-icon { font-size: 1rem; }
+
+  /* ── STATS BAR ── */
+  .stats-bar {
+    background: var(--surface); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border);
+    padding: 2rem 2.5rem;
+  }
+  .stats-inner { max-width: 1200px; margin: 0 auto; display: flex; justify-content: space-around; gap: 2rem; flex-wrap: wrap; }
+  .stat { text-align: center; }
+  .stat-num { font-family: var(--mono); font-size: 2.25rem; font-weight: 700; color: var(--accent); }
+  .stat-label { font-size: 0.8rem; color: var(--muted); margin-top: 0.2rem; }
+
+  /* ── SECTIONS ── */
+  section { padding: 6rem 2.5rem; }
+  .section-inner { max-width: 1200px; margin: 0 auto; }
+  .section-eyebrow { font-family: var(--mono); font-size: 0.72rem; color: var(--accent); letter-spacing: 0.12em; text-transform: uppercase; margin-bottom: 1rem; }
+  .section-title { font-size: clamp(1.8rem, 3vw, 2.6rem); font-weight: 700; letter-spacing: -0.02em; line-height: 1.1; margin-bottom: 1rem; }
+  .section-body { color: var(--muted); font-size: 1.05rem; max-width: 560px; line-height: 1.75; }
+
+  /* ── HOW IT WORKS ── */
+  .how { background: var(--surface); }
+  .steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 0; margin-top: 3.5rem; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+  .step { padding: 2rem; border-right: 1px solid var(--border); position: relative; }
+  .step:last-child { border-right: none; }
+  .step-num { font-family: var(--mono); font-size: 0.7rem; color: var(--heat-red); letter-spacing: 0.1em; margin-bottom: 1.25rem; }
+  .step-icon { font-size: 2rem; margin-bottom: 1rem; }
+  .step-title { font-weight: 600; font-size: 1rem; margin-bottom: 0.5rem; }
+  .step-desc { font-size: 0.875rem; color: var(--muted); line-height: 1.65; }
+  .step-connector {
+    position: absolute; top: 50%; right: -14px;
+    width: 28px; height: 28px;
+    background: var(--heat-red); border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.7rem; z-index: 2; color: #fff;
+    transform: translateY(-50%);
+  }
+  .step:last-child .step-connector { display: none; }
+
+  /* ── SITE MAP ── */
+  .site-section { background: var(--bg); }
+  .site-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; margin-top: 3rem; }
+  .site-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 10px; padding: 1.75rem; position: relative;
+    overflow: hidden; transition: border-color 0.2s;
+  }
+  .site-card:hover { border-color: var(--muted); }
+  .site-card::before {
+    content: '';
+    position: absolute; top: 0; left: 0; right: 0; height: 3px;
+  }
+  .site-card.high::before   { background: var(--heat-red); }
+  .site-card.medium::before { background: var(--warn-ylw); }
+  .site-card.low::before    { background: var(--safe-grn); }
+  .site-card.low2::before   { background: var(--safe-grn); }
+  .site-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1.25rem; }
+  .site-name { font-weight: 600; font-size: 1rem; }
+  .site-loc { font-size: 0.78rem; color: var(--muted); margin-top: 0.2rem; font-family: var(--mono); }
+  .risk-badge {
+    font-family: var(--mono); font-size: 0.65rem; letter-spacing: 0.08em;
+    padding: 0.25rem 0.6rem; border-radius: 4px;
+  }
+  .risk-badge.high   { background: rgba(255,75,43,0.15); color: var(--heat-red); }
+  .risk-badge.medium { background: rgba(245,197,24,0.15); color: var(--warn-ylw); }
+  .risk-badge.low    { background: rgba(46,204,113,0.15); color: var(--safe-grn); }
+
+  .site-stats { display: flex; gap: 1.5rem; margin-bottom: 1.25rem; }
+  .site-stat-num { font-family: var(--mono); font-size: 1.5rem; font-weight: 700; }
+  .site-stat-num.red { color: var(--heat-red); }
+  .site-stat-num.ylw { color: var(--warn-ylw); }
+  .site-stat-num.grn { color: var(--safe-grn); }
+  .site-stat-label { font-size: 0.72rem; color: var(--muted); margin-top: 0.15rem; }
+
+  /* temp bar */
+  .temp-bar-wrap { margin-top: 0.5rem; }
+  .temp-bar-label { display: flex; justify-content: space-between; font-size: 0.7rem; color: var(--muted); font-family: var(--mono); margin-bottom: 0.4rem; }
+  .temp-bar-track { background: var(--card); border-radius: 4px; height: 6px; overflow: hidden; }
+  .temp-bar-fill { height: 100%; border-radius: 4px; transition: width 0.6s ease; }
+
+  /* ── FEATURES ── */
+  .features-section { background: var(--surface); }
+  .features-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.5rem; margin-top: 3rem; }
+  .feature-card {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 10px; padding: 1.75rem;
+    transition: border-color 0.2s, transform 0.2s;
+  }
+  .feature-card:hover { border-color: var(--accent); transform: translateY(-3px); }
+  .feature-icon { font-size: 1.75rem; margin-bottom: 1rem; }
+  .feature-title { font-weight: 600; margin-bottom: 0.5rem; }
+  .feature-desc { font-size: 0.875rem; color: var(--muted); line-height: 1.65; }
+
+  /* ── ALERT TYPES ── */
+  .alerts-section { background: var(--bg); }
+  .alert-levels { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.5rem; margin-top: 3rem; }
+  .level-card {
+    border-radius: 10px; padding: 2rem; text-align: center;
+    border: 1px solid var(--border);
+  }
+  .level-card.safe   { border-color: rgba(46,204,113,0.3); }
+  .level-card.warn   { border-color: rgba(245,197,24,0.4); }
+  .level-card.danger { border-color: rgba(255,75,43,0.4); background: rgba(255,75,43,0.04); }
+  .level-temp { font-family: var(--mono); font-size: 2.75rem; font-weight: 700; line-height: 1; }
+  .level-card.safe   .level-temp { color: var(--safe-grn); }
+  .level-card.warn   .level-temp { color: var(--warn-ylw); }
+  .level-card.danger .level-temp { color: var(--heat-red); }
+  .level-label { font-weight: 600; margin: 0.75rem 0 0.5rem; font-size: 1rem; }
+  .level-desc { font-size: 0.83rem; color: var(--muted); line-height: 1.6; }
+  .level-action { margin-top: 1rem; font-size: 0.78rem; font-family: var(--mono); }
+  .level-card.safe   .level-action { color: var(--safe-grn); }
+  .level-card.warn   .level-action { color: var(--warn-ylw); }
+  .level-card.danger .level-action { color: var(--heat-red); }
+
+  /* ── CTA ── */
+  .cta-section {
+    background: linear-gradient(135deg, rgba(255,75,43,0.08) 0%, rgba(0,229,176,0.06) 100%);
+    border-top: 1px solid var(--border);
+    text-align: center;
+  }
+  .cta-title { font-size: clamp(2rem, 4vw, 3.2rem); font-weight: 700; letter-spacing: -0.02em; margin-bottom: 1.25rem; }
+  .cta-sub { color: var(--muted); font-size: 1.1rem; max-width: 480px; margin: 0 auto 2.5rem; }
+  .cta-actions { display: flex; justify-content: center; gap: 1rem; flex-wrap: wrap; }
+
+  /* ── FOOTER ── */
+  footer {
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+    padding: 2rem 2.5rem;
+    display: flex; justify-content: space-between; align-items: center;
+    flex-wrap: wrap; gap: 1rem;
+  }
+  .footer-logo { font-family: var(--mono); color: var(--accent); font-size: 0.9rem; }
+  .footer-note { font-size: 0.78rem; color: var(--muted); }
+
+  /* ── RESPONSIVE ── */
+  @media (max-width: 768px) {
+    .hero-inner { grid-template-columns: 1fr; }
+    .site-grid { grid-template-columns: 1fr; }
+    .alert-levels { grid-template-columns: 1fr; }
+    .worker-grid { grid-template-columns: repeat(2, 1fr); }
+    nav .nav-links { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav>
+  <div class="nav-logo">HEATGUARD</div>
+  <ul class="nav-links">
+    <li><a href="#how">How it works</a></li>
+    <li><a href="#sites">Site Overview</a></li>
+    <li><a href="#alerts">Alert Levels</a></li>
+  </ul>
+  <button class="nav-cta">Request Demo</button>
+</nav>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="hero-inner">
+    <div>
+      <div class="hero-eyebrow">Wearable · Real-time · Site-wide</div>
+      <h1 class="hero-title">Know when your workers are in the <span class="heat">danger zone</span></h1>
+      <p class="hero-sub">Skin-temperature sensors worn on-site stream live data to project managers — so you intervene before heat stress becomes a medical emergency.</p>
+      <div class="hero-actions">
+        <button class="btn-primary">See Live Demo</button>
+        <button class="btn-outline">View Site Map</button>
+      </div>
+    </div>
+
+    <!-- LIVE DASHBOARD MOCK -->
+    <div class="dashboard-mock">
+      <div class="mock-topbar">
+        <span class="mock-title">SITE A · LIVE MONITOR</span>
+        <span class="live-dot">LIVE</span>
+      </div>
+      <div class="worker-grid">
+        <div class="worker-card safe">
+          <div class="worker-name">WKR-001</div>
+          <div class="worker-temp">36.2°</div>
+          <div class="worker-status">Normal</div>
+        </div>
+        <div class="worker-card safe">
+          <div class="worker-name">WKR-002</div>
+          <div class="worker-temp">36.8°</div>
+          <div class="worker-status">Normal</div>
+        </div>
+        <div class="worker-card warn">
+          <div class="worker-name">WKR-003</div>
+          <div class="worker-temp">37.6°</div>
+          <div class="worker-status">Watch</div>
+        </div>
+        <div class="worker-card warn">
+          <div class="worker-name">WKR-004</div>
+          <div class="worker-temp">37.9°</div>
+          <div class="worker-status">Watch</div>
+        </div>
+        <div class="worker-card danger">
+          <div class="worker-name">WKR-005</div>
+          <div class="worker-temp">38.5°</div>
+          <div class="worker-status">⚠ Alert</div>
+        </div>
+        <div class="worker-card safe">
+          <div class="worker-name">WKR-006</div>
+          <div class="worker-temp">36.5°</div>
+          <div class="worker-status">Normal</div>
+        </div>
+      </div>
+      <div class="alert-bar">
+        <span class="alert-icon">🔴</span>
+        WKR-005 exceeded threshold — Zone 3, Level 2 scaffold
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- STATS -->
+<div class="stats-bar">
+  <div class="stats-inner">
+    <div class="stat"><div class="stat-num">340+</div><div class="stat-label">Workers monitored daily</div></div>
+    <div class="stat"><div class="stat-num">&lt;4s</div><div class="stat-label">Alert latency</div></div>
+    <div class="stat"><div class="stat-num">12</div><div class="stat-label">Active construction sites</div></div>
+    <div class="stat"><div class="stat-num">0</div><div class="stat-label">Heat-related hospitalizations this year</div></div>
+  </div>
+</div>
+
+<!-- HOW IT WORKS -->
+<section class="how" id="how">
+  <div class="section-inner">
+    <div class="section-eyebrow">Process</div>
+    <h2 class="section-title">From skin to screen in seconds</h2>
+    <p class="section-body">A slim patch worn on the wrist or forearm captures continuous skin temperature. No buttons. No charging mid-shift.</p>
+
+    <div class="steps">
+      <div class="step">
+        <div class="step-num">01 — SENSE</div>
+        <div class="step-icon">🩹</div>
+        <div class="step-title">Wearable Patch</div>
+        <div class="step-desc">A flex-circuit sensor worn on the inner wrist logs skin temperature every 10 seconds throughout the shift.</div>
+        <div class="step-connector">→</div>
+      </div>
+      <div class="step">
+        <div class="step-num">02 — TRANSMIT</div>
+        <div class="step-icon">📡</div>
+        <div class="step-title">BLE + Site Gateway</div>
+        <div class="step-desc">Data hops via Bluetooth Low Energy to a site gateway. No cell data needed — works inside shielded structures.</div>
+        <div class="step-connector">→</div>
+      </div>
+      <div class="step">
+        <div class="step-num">03 — ANALYSE</div>
+        <div class="step-icon">🧠</div>
+        <div class="step-title">Threshold Engine</div>
+        <div class="step-desc">Cloud logic cross-references ambient temperature, humidity, and worker history to compute personalised risk scores.</div>
+        <div class="step-connector">→</div>
+      </div>
+      <div class="step">
+        <div class="step-num">04 — ALERT</div>
+        <div class="step-icon">📲</div>
+        <div class="step-title">Manager Notification</div>
+        <div class="step-desc">Push alerts reach the PM's phone and dashboard, naming the worker, zone, and suggested action — immediately.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- SITE MAP -->
+<section class="site-section" id="sites">
+  <div class="section-inner">
+    <div class="section-eyebrow">Resource Management</div>
+    <h2 class="section-title">See which sites need attention today</h2>
+    <p class="section-body">Compare heat stress load across all active sites. Redeploy rest-rotation crews, cooling stations, or hydration checks where the data says they're needed.</p>
+
+    <div class="site-grid">
+
+      <div class="site-card high">
+        <div class="site-header">
+          <div>
+            <div class="site-name">Jurong East Mixed-Use Tower</div>
+            <div class="site-loc">Site A · Outdoor steelwork · L6–L12</div>
+          </div>
+          <div class="risk-badge high">HIGH RISK</div>
+        </div>
+        <div class="site-stats">
+          <div><div class="site-stat-num red">4</div><div class="site-stat-label">Active alerts</div></div>
+          <div><div class="site-stat-num red">38.4°C</div><div class="site-stat-label">Peak skin temp</div></div>
+          <div><div class="site-stat-num">42</div><div class="site-stat-label">Workers on-site</div></div>
+        </div>
+        <div class="temp-bar-wrap">
+          <div class="temp-bar-label"><span>Avg skin temp</span><span>37.8°C</span></div>
+          <div class="temp-bar-track"><div class="temp-bar-fill" style="width:87%; background: var(--heat-red);"></div></div>
+        </div>
+      </div>
+
+      <div class="site-card medium">
+        <div class="site-header">
+          <div>
+            <div class="site-name">Tuas Port Logistics Hub</div>
+            <div class="site-loc">Site B · Exposed concrete deck</div>
+          </div>
+          <div class="risk-badge medium">MODERATE</div>
+        </div>
+        <div class="site-stats">
+          <div><div class="site-stat-num ylw">1</div><div class="site-stat-label">Active alerts</div></div>
+          <div><div class="site-stat-num ylw">37.7°C</div><div class="site-stat-label">Peak skin temp</div></div>
+          <div><div class="site-stat-num">35</div><div class="site-stat-label">Workers on-site</div></div>
+        </div>
+        <div class="temp-bar-wrap">
+          <div class="temp-bar-label"><span>Avg skin temp</span><span>37.1°C</span></div>
+          <div class="temp-bar-track"><div class="temp-bar-fill" style="width:64%; background: var(--warn-ylw);"></div></div>
+        </div>
+      </div>
+
+      <div class="site-card low">
+        <div class="site-header">
+          <div>
+            <div class="site-name">Queenstown Residential Block</div>
+            <div class="site-loc">Site C · Interior fitout, shaded</div>
+          </div>
+          <div class="risk-badge low">LOW</div>
+        </div>
+        <div class="site-stats">
+          <div><div class="site-stat-num grn">0</div><div class="site-stat-label">Active alerts</div></div>
+          <div><div class="site-stat-num grn">36.6°C</div><div class="site-stat-label">Peak skin temp</div></div>
+          <div><div class="site-stat-num">28</div><div class="site-stat-label">Workers on-site</div></div>
+        </div>
+        <div class="temp-bar-wrap">
+          <div class="temp-bar-label"><span>Avg skin temp</span><span>36.2°C</span></div>
+          <div class="temp-bar-track"><div class="temp-bar-fill" style="width:38%; background: var(--safe-grn);"></div></div>
+        </div>
+      </div>
+
+      <div class="site-card low2">
+        <div class="site-header">
+          <div>
+            <div class="site-name">Tengah BTO Road Works</div>
+            <div class="site-loc">Site D · Night shift · 1900–0600</div>
+          </div>
+          <div class="risk-badge low">LOW</div>
+        </div>
+        <div class="site-stats">
+          <div><div class="site-stat-num grn">0</div><div class="site-stat-label">Active alerts</div></div>
+          <div><div class="site-stat-num grn">36.3°C</div><div class="site-stat-label">Peak skin temp</div></div>
+          <div><div class="site-stat-num">19</div><div class="site-stat-label">Workers on-site</div></div>
+        </div>
+        <div class="temp-bar-wrap">
+          <div class="temp-bar-label"><span>Avg skin temp</span><span>35.9°C</span></div>
+          <div class="temp-bar-track"><div class="temp-bar-fill" style="width:28%; background: var(--safe-grn);"></div></div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- FEATURES -->
+<section class="features-section">
+  <div class="section-inner">
+    <div class="section-eyebrow">Platform</div>
+    <h2 class="section-title">Built for the site office, not the lab</h2>
+
+    <div class="features-grid">
+      <div class="feature-card">
+        <div class="feature-icon">📍</div>
+        <div class="feature-title">Zone-level location</div>
+        <div class="feature-desc">Alerts include the zone and level the worker was last seen — no GPS needed, just site beacon anchors every 20 m.</div>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">📊</div>
+        <div class="feature-title">Shift trend history</div>
+        <div class="feature-desc">Review how temperatures climbed through the day. Spot the 2 PM spike and adjust break schedules before the next shift.</div>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">🔔</div>
+        <div class="feature-title">Escalating alerts</div>
+        <div class="feature-desc">A watch nudge at 37.5°C. A push alert at 38°C. A call and site siren at 38.5°C. Every level has a defined response protocol.</div>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">🌡️</div>
+        <div class="feature-title">Ambient correlation</div>
+        <div class="feature-desc">Pairs skin data with a site weather station — accounting for humidity and radiant heat, not just air temperature.</div>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">📋</div>
+        <div class="feature-title">Compliance export</div>
+        <div class="feature-desc">One-click PDF reports per shift, ready for MOM submission. Timestamped, worker-anonymised by default.</div>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">♻️</div>
+        <div class="feature-title">Resource reallocation</div>
+        <div class="feature-desc">Cross-site heat index dashboard lets you move cooling assets, water stations, and crews to where they're needed most.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ALERT LEVELS -->
+<section class="alerts-section" id="alerts">
+  <div class="section-inner">
+    <div class="section-eyebrow">Alert Protocol</div>
+    <h2 class="section-title">Three levels. Clear actions. No ambiguity.</h2>
+    <p class="section-body">Every threshold maps directly to a response — so your supervisors never have to decide what to do next.</p>
+
+    <div class="alert-levels">
+      <div class="level-card safe">
+        <div class="level-temp">≤37.4°</div>
+        <div class="level-label">Normal</div>
+        <div class="level-desc">Worker is within safe operating range. No intervention needed. Dashboard shows green.</div>
+        <div class="level-action">→ Monitor passively</div>
+      </div>
+      <div class="level-card warn">
+        <div class="level-temp">37.5–38°</div>
+        <div class="level-label">Caution</div>
+        <div class="level-desc">Elevated skin temp detected. PM receives a push notification. Worker should hydrate and move to shade.</div>
+        <div class="level-action">→ Notify PM · Schedule break</div>
+      </div>
+      <div class="level-card danger">
+        <div class="level-temp">&gt;38°</div>
+        <div class="level-label">Danger</div>
+        <div class="level-desc">Potential heat stress. Loud siren on site. Supervisor calls worker. First aid on standby. Work in zone suspended.</div>
+        <div class="level-action">→ Evacuate zone · Medical check</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- LIVE DEMO SECTION -->
+<section id="demo" style="background: var(--bg); padding: 6rem 2.5rem;">
+  <div class="section-inner">
+    <div class="section-eyebrow">Interactive Demo</div>
+    <h2 class="section-title">See the alert system in action</h2>
+    <p class="section-body" style="margin-bottom: 3rem;">Simulate a heat injury event and watch the supervisor app respond in real time — notification, worker ID, and exact site location.</p>
+
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; align-items: start;">
+
+      <!-- WORKER WEARABLE PANEL -->
+      <div style="background: var(--surface); border: 1px solid var(--border); border-radius: 14px; overflow: hidden;">
+        <div style="background: var(--card); padding: 1rem 1.5rem; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center;">
+          <div style="font-family: var(--mono); font-size: 0.72rem; color: var(--muted);">WORKER WEARABLE · WKR-005</div>
+          <div id="sensor-dot" style="width: 8px; height: 8px; border-radius: 50%; background: var(--safe-grn); transition: background 0.4s;"></div>
+        </div>
+        <div style="padding: 2rem; text-align: center;">
+          <div style="font-family: var(--mono); font-size: 0.72rem; color: var(--muted); margin-bottom: 0.5rem; letter-spacing: 0.1em;">SKIN TEMPERATURE</div>
+          <div id="temp-display" style="font-family: var(--mono); font-size: 5rem; font-weight: 700; color: var(--safe-grn); line-height: 1; transition: color 0.4s;">36.2°C</div>
+          <div id="worker-status-label" style="font-size: 0.85rem; color: var(--muted); margin-top: 0.75rem; font-family: var(--mono);">STATUS: NORMAL</div>
+
+          <!-- Vitals row -->
+          <div style="display: flex; justify-content: center; gap: 2rem; margin-top: 1.75rem;">
+            <div style="text-align: center;">
+              <div id="heart-rate" style="font-family: var(--mono); font-size: 1.4rem; font-weight: 700; color: var(--accent);">82</div>
+              <div style="font-size: 0.68rem; color: var(--muted);">BPM</div>
+            </div>
+            <div style="text-align: center;">
+              <div style="font-family: var(--mono); font-size: 1.4rem; font-weight: 700; color: var(--accent);">34°C</div>
+              <div style="font-size: 0.68rem; color: var(--muted);">AMBIENT</div>
+            </div>
+            <div style="text-align: center;">
+              <div style="font-family: var(--mono); font-size: 1.4rem; font-weight: 700; color: var(--accent);">82%</div>
+              <div style="font-size: 0.68rem; color: var(--muted);">HUMIDITY</div>
+            </div>
+          </div>
+
+          <!-- Temp progress bar -->
+          <div style="margin-top: 2rem;">
+            <div style="display: flex; justify-content: space-between; font-family: var(--mono); font-size: 0.65rem; color: var(--muted); margin-bottom: 0.4rem;">
+              <span>35°C SAFE</span><span>38°C DANGER</span>
+            </div>
+            <div style="background: var(--card); border-radius: 6px; height: 10px; position: relative;">
+              <div id="temp-fill" style="height: 100%; border-radius: 6px; width: 40%; background: var(--safe-grn); transition: width 0.5s, background 0.5s;"></div>
+              <div style="position: absolute; top: -2px; left: 66%; height: 14px; width: 2px; background: var(--warn-ylw); border-radius: 2px;"></div>
+              <div style="position: absolute; top: -2px; left: 84%; height: 14px; width: 2px; background: var(--heat-red); border-radius: 2px;"></div>
+            </div>
+          </div>
+
+          <!-- Location info -->
+          <div style="margin-top: 1.75rem; background: var(--card); border-radius: 8px; padding: 0.9rem 1.25rem; text-align: left;">
+            <div style="font-family: var(--mono); font-size: 0.65rem; color: var(--muted); margin-bottom: 0.5rem;">LAST KNOWN LOCATION</div>
+            <div style="font-size: 0.9rem; font-weight: 600;">Zone 3 — Level 8 Scaffold</div>
+            <div style="font-family: var(--mono); font-size: 0.7rem; color: var(--muted); margin-top: 0.2rem;">Beacon: BEA-08-03 · Jurong East Tower A</div>
+          </div>
+
+          <!-- Trigger button -->
+          <button id="trigger-btn" onclick="triggerAlert()" style="
+            margin-top: 2rem; width: 100%;
+            background: var(--heat-red); color: #fff; border: none;
+            padding: 1rem; border-radius: 8px; font-family: var(--sans);
+            font-weight: 700; font-size: 1rem; cursor: pointer;
+            transition: opacity 0.2s; letter-spacing: 0.02em;
+          ">⚠ Simulate Heat Injury Event</button>
+          <div style="font-size: 0.72rem; color: var(--muted); margin-top: 0.6rem;">Simulates skin temp rising to danger level</div>
+        </div>
+      </div>
+
+      <!-- SUPERVISOR APP PANEL -->
+      <div style="background: var(--surface); border: 1px solid var(--border); border-radius: 14px; overflow: hidden;">
+        <div style="background: var(--card); padding: 1rem 1.5rem; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center;">
+          <div style="font-family: var(--mono); font-size: 0.72rem; color: var(--muted);">SUPERVISOR APP · PM DASHBOARD</div>
+          <div id="app-live" style="display: flex; align-items: center; gap: 0.4rem; font-family: var(--mono); font-size: 0.68rem; color: var(--safe-grn);">
+            <div style="width: 7px; height: 7px; border-radius: 50%; background: var(--safe-grn); animation: pulse 1.6s infinite;"></div>CONNECTED
+          </div>
+        </div>
+        <div style="padding: 1.5rem;">
+
+          <!-- Notification feed -->
+          <div style="font-family: var(--mono); font-size: 0.68rem; color: var(--muted); margin-bottom: 0.75rem; letter-spacing: 0.08em;">NOTIFICATION FEED</div>
+          <div id="notif-feed" style="display: flex; flex-direction: column; gap: 0.6rem; min-height: 80px;">
+            <div style="background: var(--card); border-radius: 6px; padding: 0.7rem 1rem; font-size: 0.8rem; color: var(--muted); font-style: italic;">No active alerts — all workers in safe range</div>
+          </div>
+
+          <!-- Site map -->
+          <div style="margin-top: 1.75rem;">
+            <div style="font-family: var(--mono); font-size: 0.68rem; color: var(--muted); margin-bottom: 0.75rem; letter-spacing: 0.08em;">SITE MAP — JURONG EAST TOWER A</div>
+            <div id="site-map" style="background: var(--card); border-radius: 10px; padding: 1.25rem; position: relative; overflow: hidden;">
+
+              <!-- Floor grid visual -->
+              <div style="display: grid; grid-template-columns: repeat(4,1fr); gap: 6px;">
+                <!-- Levels top to bottom: 10, 9, 8, 7 -->
+                <div style="font-family:var(--mono);font-size:0.6rem;color:var(--muted);align-self:center;">LVL 10</div>
+                <div class="zone-cell" data-zone="z10-1" style="background:#1C2220;border-radius:4px;height:36px;display:flex;align-items:center;justify-content:center;font-size:0.65rem;font-family:var(--mono);color:var(--muted);">Z1</div>
+                <div class="zone-cell" data-zone="z10-2" style="background:#1C2220;border-radius:4px;height:36px;display:flex;align-items:center;justify-content:center;font-size:0.65rem;font-family:var(--mono);color:var(--muted);">Z2</div>
+                <div class="zone-cell" data-zone="z10-3" style="background:#1C2220;border-radius:4px;height:36px;display:flex;align-items:center;justify-content:center;font-size:0.65rem;font-family:var(--mono);color:var(--muted);">Z3</div>
+
+                <div style="font-family:var(--mono);font-size:0.6rem;color:var(--muted);align-self:center;">LVL 9</div>
+                <div class="zone-cell" data-zone="z9-1" style="background:#1C2220;border-radius:4px;height:36px;display:flex;align-items:center;justify-content:center;font-size:0.65rem;font-family:var(--mono);color:var(--muted);">Z1</div>
+                <div class="zone-cell" data-zone="z9-2" style="background:#1C2220;border-radius:4px;height:36px;display:flex;align-items:center;justify-content:center;font-size:0.65rem;font-family:var(--mono);color:var(--muted);">Z2</div>
+                <div class="zone-cell" data-zone="z9-3" style="background:#1C2220;border-radius:4px;height:36px;display:flex;align-items:center;justify-content:center;font-size:0.65rem;font-family:var(--mono);color:var(--muted);">Z3</div>
+
+                <div style="font-family:var(--mono);font-size:0.6rem;color:var(--muted);align-self:center;">LVL 8</div>
+                <div class="zone-cell" data-zone="z8-1" style="background:#1C2220;border-radius:4px;height:36px;display:flex;align-items:center;justify-content:center;font-size:0.65rem;font-family:var(--mono);color:var(--muted);">Z1</div>
+                <div class="zone-cell" data-zone="z8-2" style="background:#1C2220;border-radius:4px;height:36px;display:flex;align-items:center;justify-content:center;font-size:0.65rem;font-family:var(--mono);color:var(--muted);">Z2</div>
+                <div id="target-zone" class="zone-cell" data-zone="z8-3" style="background:#1C2220;border-radius:4px;height:36px;display:flex;align-items:center;justify-content:center;font-size:0.65rem;font-family:var(--mono);color:var(--muted);border:1px solid var(--border);transition:all 0.4s;">Z3 ←</div>
+
+                <div style="font-family:var(--mono);font-size:0.6rem;color:var(--muted);align-self:center;">LVL 7</div>
+                <div class="zone-cell" style="background:#1C2220;border-radius:4px;height:36px;"></div>
+                <div class="zone-cell" style="background:#1C2220;border-radius:4px;height:36px;"></div>
+                <div class="zone-cell" style="background:#1C2220;border-radius:4px;height:36px;"></div>
+              </div>
+
+              <!-- Map legend -->
+              <div style="display:flex;gap:1.25rem;margin-top:1rem;flex-wrap:wrap;">
+                <div style="display:flex;align-items:center;gap:0.4rem;font-size:0.65rem;color:var(--muted);">
+                  <div style="width:12px;height:12px;border-radius:3px;background:var(--safe-grn);opacity:0.5;"></div>Safe worker
+                </div>
+                <div style="display:flex;align-items:center;gap:0.4rem;font-size:0.65rem;color:var(--muted);">
+                  <div style="width:12px;height:12px;border-radius:3px;background:var(--warn-ylw);"></div>Caution
+                </div>
+                <div style="display:flex;align-items:center;gap:0.4rem;font-size:0.65rem;color:var(--muted);">
+                  <div style="width:12px;height:12px;border-radius:3px;background:var(--heat-red);"></div>Danger / Injury
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Action panel (hidden until alert) -->
+          <div id="action-panel" style="display:none; margin-top:1.5rem; background: rgba(255,75,43,0.06); border: 1px solid rgba(255,75,43,0.3); border-radius:10px; padding:1.25rem;">
+            <div style="font-family:var(--mono);font-size:0.68rem;color:var(--heat-red);margin-bottom:1rem;letter-spacing:0.08em;">⚠ RECOMMENDED ACTIONS</div>
+            <div style="display:flex;flex-direction:column;gap:0.6rem;">
+              <button onclick="markAction(this,'Dispatched first aid to Zone 3, Level 8')" style="background:var(--heat-red);color:#fff;border:none;padding:0.65rem 1rem;border-radius:6px;font-family:var(--sans);font-weight:600;font-size:0.85rem;cursor:pointer;text-align:left;transition:opacity 0.2s;">🚑 Dispatch First Aid to Zone 3, Level 8</button>
+              <button onclick="markAction(this,'Suspended work in Zone 3')" style="background:var(--card);color:var(--text);border:1px solid var(--border);padding:0.65rem 1rem;border-radius:6px;font-family:var(--sans);font-weight:600;font-size:0.85rem;cursor:pointer;text-align:left;transition:opacity 0.2s;">🚧 Suspend Work in Zone 3</button>
+              <button onclick="markAction(this,'Called WKR-005 directly')" style="background:var(--card);color:var(--text);border:1px solid var(--border);padding:0.65rem 1rem;border-radius:6px;font-family:var(--sans);font-weight:600;font-size:0.85rem;cursor:pointer;text-align:left;transition:opacity 0.2s;">📞 Call WKR-005 Directly</button>
+            </div>
+          </div>
+
+          <!-- Reset button -->
+          <button id="reset-btn" onclick="resetDemo()" style="display:none; margin-top:1rem; width:100%; background:transparent; color:var(--muted); border:1px solid var(--border); padding:0.65rem; border-radius:6px; font-family:var(--sans); font-size:0.85rem; cursor:pointer;">↺ Reset Demo</button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<script>
+  let alertActive = false;
+  let riseInterval = null;
+  let currentTemp = 36.2;
+
+  function triggerAlert() {
+    if (alertActive) return;
+    alertActive = true;
+
+    const btn = document.getElementById('trigger-btn');
+    btn.disabled = true;
+    btn.style.opacity = '0.5';
+    btn.textContent = 'Simulating…';
+
+    // Gradually raise temperature
+    riseInterval = setInterval(() => {
+      currentTemp = Math.min(currentTemp + 0.3, 38.8);
+      updateTempDisplay(currentTemp);
+      if (currentTemp >= 38.8) {
+        clearInterval(riseInterval);
+        fireAlert();
+      }
+    }, 300);
+  }
+
+  function updateTempDisplay(temp) {
+    const display = document.getElementById('temp-display');
+    const fill = document.getElementById('temp-fill');
+    const statusLabel = document.getElementById('worker-status-label');
+    const dot = document.getElementById('sensor-dot');
+    const hr = document.getElementById('heart-rate');
+
+    display.textContent = temp.toFixed(1) + '°C';
+    hr.textContent = Math.round(82 + (temp - 36.2) * 8);
+
+    // Fill: 35°C = 0%, 40°C = 100%
+    const pct = Math.min(((temp - 35) / 5) * 100, 100);
+    fill.style.width = pct + '%';
+
+    if (temp < 37.5) {
+      display.style.color = 'var(--safe-grn)';
+      fill.style.background = 'var(--safe-grn)';
+      dot.style.background = 'var(--safe-grn)';
+      statusLabel.textContent = 'STATUS: NORMAL';
+      statusLabel.style.color = 'var(--safe-grn)';
+    } else if (temp < 38) {
+      display.style.color = 'var(--warn-ylw)';
+      fill.style.background = 'var(--warn-ylw)';
+      dot.style.background = 'var(--warn-ylw)';
+      statusLabel.textContent = 'STATUS: CAUTION — RISING';
+      statusLabel.style.color = 'var(--warn-ylw)';
+      addNotif('warn', '⚡ WKR-005 skin temp rising — ' + temp.toFixed(1) + '°C — Zone 3, Lvl 8');
+    } else {
+      display.style.color = 'var(--heat-red)';
+      fill.style.background = 'var(--heat-red)';
+      dot.style.background = 'var(--heat-red)';
+      statusLabel.textContent = '⚠ STATUS: DANGER';
+      statusLabel.style.color = 'var(--heat-red)';
+    }
+  }
+
+  let lastWarnNotif = 0;
+  function addNotif(type, msg) {
+    const now = Date.now();
+    if (type === 'warn' && now - lastWarnNotif < 2000) return;
+    lastWarnNotif = now;
+
+    const feed = document.getElementById('notif-feed');
+    const colors = { safe: 'var(--safe-grn)', warn: 'var(--warn-ylw)', danger: 'var(--heat-red)' };
+    const bgs = { safe: 'rgba(46,204,113,0.08)', warn: 'rgba(245,197,24,0.08)', danger: 'rgba(255,75,43,0.1)' };
+    const borders = { safe: 'rgba(46,204,113,0.2)', warn: 'rgba(245,197,24,0.25)', danger: 'rgba(255,75,43,0.35)' };
+
+    // Clear placeholder
+    if (feed.querySelector('[style*="italic"]')) feed.innerHTML = '';
+
+    const time = new Date().toLocaleTimeString('en-SG', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    const el = document.createElement('div');
+    el.style.cssText = `background:${bgs[type]};border:1px solid ${borders[type]};border-radius:6px;padding:0.7rem 1rem;font-size:0.8rem;color:${colors[type]};animation:slideIn 0.3s ease;`;
+    el.innerHTML = `<span style="font-family:var(--mono);font-size:0.65rem;opacity:0.7;">${time}</span><br>${msg}`;
+    feed.insertBefore(el, feed.firstChild);
+  }
+
+  function fireAlert() {
+    // Flash target zone on map
+    const zone = document.getElementById('target-zone');
+    zone.style.background = 'rgba(255,75,43,0.25)';
+    zone.style.border = '2px solid var(--heat-red)';
+    zone.style.color = 'var(--heat-red)';
+    zone.style.fontWeight = '700';
+    zone.innerHTML = '🔴 Z3';
+    let flash = false;
+    setInterval(() => {
+      flash = !flash;
+      zone.style.background = flash ? 'rgba(255,75,43,0.35)' : 'rgba(255,75,43,0.12)';
+    }, 600);
+
+    // Big alert notification
+    addNotif('danger', '🚨 HEAT INJURY — WKR-005 · 38.8°C · Zone 3, Level 8 Scaffold · Beacon BEA-08-03');
+
+    setTimeout(() => addNotif('danger', '📍 Location confirmed: Zone 3, Level 8 · Jurong East Tower A · Grid E-8'), 800);
+    setTimeout(() => addNotif('warn',   '💓 Heart rate: 118 BPM — elevated'), 1500);
+    setTimeout(() => addNotif('danger', '🔔 Site siren activated — Zone 3 evacuation in progress'), 2200);
+
+    // Show action panel
+    setTimeout(() => {
+      document.getElementById('action-panel').style.display = 'block';
+      document.getElementById('reset-btn').style.display = 'block';
+    }, 2500);
+  }
+
+  function markAction(btn, msg) {
+    btn.style.opacity = '0.45';
+    btn.disabled = true;
+    btn.textContent = '✓ ' + btn.textContent.slice(2);
+    addNotif('safe', '✓ Action logged: ' + msg);
+  }
+
+  function resetDemo() {
+    alertActive = false;
+    currentTemp = 36.2;
+    clearInterval(riseInterval);
+    lastWarnNotif = 0;
+
+    // Reset worker panel
+    updateTempDisplay(36.2);
+    document.getElementById('heart-rate').textContent = '82';
+    const btn = document.getElementById('trigger-btn');
+    btn.disabled = false;
+    btn.style.opacity = '1';
+    btn.textContent = '⚠ Simulate Heat Injury Event';
+
+    // Reset map
+    const zone = document.getElementById('target-zone');
+    zone.style.background = '#1C2220';
+    zone.style.border = '1px solid var(--border)';
+    zone.style.color = 'var(--muted)';
+    zone.style.fontWeight = 'normal';
+    zone.innerHTML = 'Z3 ←';
+
+    // Reset feed
+    document.getElementById('notif-feed').innerHTML = '<div style="background:var(--card);border-radius:6px;padding:0.7rem 1rem;font-size:0.8rem;color:var(--muted);font-style:italic;">No active alerts — all workers in safe range</div>';
+
+    // Reset action panel
+    document.getElementById('action-panel').style.display = 'none';
+    document.getElementById('reset-btn').style.display = 'none';
+    const actionBtns = document.querySelectorAll('#action-panel button');
+    actionBtns.forEach(b => { b.disabled = false; b.style.opacity = '1'; });
+  }
+</script>
+
+<style>
+  @keyframes slideIn { from { opacity:0; transform:translateY(-8px); } to { opacity:1; transform:translateY(0); } }
+  @media (max-width: 768px) {
+    #demo .section-inner > div[style*="grid-template-columns: 1fr 1fr"] {
+      grid-template-columns: 1fr !important;
+    }
+  }
+</style>
+
+<!-- CTA -->
+<section class="cta-section">
+  <div class="section-inner">
+    <h2 class="cta-title">Ready to protect your team?</h2>
+    <p class="cta-sub">Pilot HeatGuard on one site for 30 days. Full hardware, full dashboard, no commitment.</p>
+    <div class="cta-actions">
+      <button class="btn-primary">Start a Pilot</button>
+      <button class="btn-outline">Download Spec Sheet</button>
+    </div>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer>
+  <div class="footer-logo">HEATGUARD</div>
+  <div class="footer-note">Designed for construction sites in tropical climates · Singapore</div>
+</footer>
+
+</body>
+</html>
