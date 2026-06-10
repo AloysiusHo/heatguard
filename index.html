@@ -703,7 +703,26 @@
             </div>
           </div>
 
-          <!-- Action panel (hidden until alert) -->
+          <!-- Acknowledge banner (hidden until alert fires) -->
+          <div id="ack-banner" style="display:none; margin-top:1.25rem;">
+            <div id="ack-pulse" style="background:rgba(255,75,43,0.1); border:2px solid var(--heat-red); border-radius:10px; padding:1rem 1.25rem; animation: ackPulse 1s ease-in-out infinite;">
+              <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.75rem;">
+                <div>
+                  <div style="font-family:var(--mono);font-size:0.68rem;color:var(--heat-red);letter-spacing:0.08em;">UNACKNOWLEDGED ALERT</div>
+                  <div id="escalation-label" style="font-size:0.85rem;color:var(--text);margin-top:0.3rem;">Sending signal to supervisor...</div>
+                  <div id="retry-counter" style="font-family:var(--mono);font-size:0.7rem;color:var(--heat-red);margin-top:0.25rem;">Attempt 1 of ∞ — retrying every 8s</div>
+                </div>
+                <button onclick="acknowledgAlert()" style="
+                  background:var(--heat-red);color:#fff;border:none;
+                  padding:0.75rem 1.5rem;border-radius:8px;
+                  font-family:var(--sans);font-weight:700;font-size:0.9rem;
+                  cursor:pointer;white-space:nowrap;flex-shrink:0;
+                ">✔ Acknowledge</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Action panel (hidden until acknowledged) -->
           <div id="action-panel" style="display:none; margin-top:1.5rem; background: rgba(255,75,43,0.06); border: 1px solid rgba(255,75,43,0.3); border-radius:10px; padding:1.25rem;">
             <div style="font-family:var(--mono);font-size:0.68rem;color:var(--heat-red);margin-bottom:1rem;letter-spacing:0.08em;">⚠ RECOMMENDED ACTIONS</div>
             <div style="display:flex;flex-direction:column;gap:0.6rem;">
@@ -724,8 +743,20 @@
 
 <script>
   let alertActive = false;
+  let acknowledged = false;
   let riseInterval = null;
+  let escalateInterval = null;
   let currentTemp = 36.2;
+  let attemptCount = 0;
+
+  const escalationSteps = [
+    { attempt: 1, msg: '📲 Push notification sent to supervisor — Zone 3, Level 8',          label: 'Push notification sent — awaiting response...' },
+    { attempt: 2, msg: '📲 No response — resending push notification (attempt 2)',            label: 'Resending push notification...' },
+    { attempt: 3, msg: '📞 No response — calling supervisor phone (attempt 3)',               label: 'Calling supervisor phone...' },
+    { attempt: 4, msg: '📞 Call unanswered — redialling supervisor (attempt 4)',              label: 'Redialling supervisor...' },
+    { attempt: 5, msg: '📟 Escalating to site foreman — supervisor unreachable (attempt 5)', label: 'Escalating to site foreman...' },
+    { attempt: 6, msg: '🚨 Site-wide emergency broadcast triggered (attempt 6)',              label: 'Emergency broadcast active — all supervisors alerted' },
+  ];
 
   function triggerAlert() {
     if (alertActive) return;
@@ -736,7 +767,6 @@
     btn.style.opacity = '0.5';
     btn.textContent = 'Simulating…';
 
-    // Gradually raise temperature
     riseInterval = setInterval(() => {
       currentTemp = Math.min(currentTemp + 0.3, 38.8);
       updateTempDisplay(currentTemp);
@@ -749,15 +779,14 @@
 
   function updateTempDisplay(temp) {
     const display = document.getElementById('temp-display');
-    const fill = document.getElementById('temp-fill');
+    const fill    = document.getElementById('temp-fill');
     const statusLabel = document.getElementById('worker-status-label');
-    const dot = document.getElementById('sensor-dot');
-    const hr = document.getElementById('heart-rate');
+    const dot     = document.getElementById('sensor-dot');
+    const hr      = document.getElementById('heart-rate');
 
     display.textContent = temp.toFixed(1) + '°C';
     hr.textContent = Math.round(82 + (temp - 36.2) * 8);
 
-    // Fill: 35°C = 0%, 40°C = 100%
     const pct = Math.min(((temp - 35) / 5) * 100, 100);
     fill.style.width = pct + '%';
 
@@ -790,14 +819,13 @@
     lastWarnNotif = now;
 
     const feed = document.getElementById('notif-feed');
-    const colors = { safe: 'var(--safe-grn)', warn: 'var(--warn-ylw)', danger: 'var(--heat-red)' };
-    const bgs = { safe: 'rgba(46,204,113,0.08)', warn: 'rgba(245,197,24,0.08)', danger: 'rgba(255,75,43,0.1)' };
-    const borders = { safe: 'rgba(46,204,113,0.2)', warn: 'rgba(245,197,24,0.25)', danger: 'rgba(255,75,43,0.35)' };
+    const colors  = { safe:'var(--safe-grn)', warn:'var(--warn-ylw)', danger:'var(--heat-red)' };
+    const bgs     = { safe:'rgba(46,204,113,0.08)', warn:'rgba(245,197,24,0.08)', danger:'rgba(255,75,43,0.1)' };
+    const borders = { safe:'rgba(46,204,113,0.2)', warn:'rgba(245,197,24,0.25)', danger:'rgba(255,75,43,0.35)' };
 
-    // Clear placeholder
     if (feed.querySelector('[style*="italic"]')) feed.innerHTML = '';
 
-    const time = new Date().toLocaleTimeString('en-SG', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    const time = new Date().toLocaleTimeString('en-SG', { hour:'2-digit', minute:'2-digit', second:'2-digit' });
     const el = document.createElement('div');
     el.style.cssText = `background:${bgs[type]};border:1px solid ${borders[type]};border-radius:6px;padding:0.7rem 1rem;font-size:0.8rem;color:${colors[type]};animation:slideIn 0.3s ease;`;
     el.innerHTML = `<span style="font-family:var(--mono);font-size:0.65rem;opacity:0.7;">${time}</span><br>${msg}`;
@@ -805,7 +833,7 @@
   }
 
   function fireAlert() {
-    // Flash target zone on map
+    // Flash map zone
     const zone = document.getElementById('target-zone');
     zone.style.background = 'rgba(255,75,43,0.25)';
     zone.style.border = '2px solid var(--heat-red)';
@@ -814,22 +842,80 @@
     zone.innerHTML = '🔴 Z3';
     let flash = false;
     setInterval(() => {
+      if (acknowledged) return;
       flash = !flash;
       zone.style.background = flash ? 'rgba(255,75,43,0.35)' : 'rgba(255,75,43,0.12)';
     }, 600);
 
-    // Big alert notification
     addNotif('danger', '🚨 HEAT INJURY — WKR-005 · 38.8°C · Zone 3, Level 8 Scaffold · Beacon BEA-08-03');
-
     setTimeout(() => addNotif('danger', '📍 Location confirmed: Zone 3, Level 8 · Jurong East Tower A · Grid E-8'), 800);
     setTimeout(() => addNotif('warn',   '💓 Heart rate: 118 BPM — elevated'), 1500);
     setTimeout(() => addNotif('danger', '🔔 Site siren activated — Zone 3 evacuation in progress'), 2200);
 
-    // Show action panel
+    // Show acknowledge banner and start escalation
     setTimeout(() => {
-      document.getElementById('action-panel').style.display = 'block';
+      document.getElementById('ack-banner').style.display = 'block';
       document.getElementById('reset-btn').style.display = 'block';
-    }, 2500);
+      runEscalation();
+    }, 2800);
+  }
+
+  function runEscalation() {
+    // Fire attempt 1 immediately
+    sendEscalationStep();
+
+    // Then keep retrying every 8 seconds until acknowledged
+    escalateInterval = setInterval(() => {
+      if (acknowledged) { clearInterval(escalateInterval); return; }
+      sendEscalationStep();
+    }, 8000);
+  }
+
+  function sendEscalationStep() {
+    if (acknowledged) return;
+    attemptCount++;
+
+    const step = escalationSteps[Math.min(attemptCount - 1, escalationSteps.length - 1)];
+    const retryEl = document.getElementById('retry-counter');
+    const labelEl = document.getElementById('escalation-label');
+
+    addNotif('danger', step.msg);
+    if (retryEl) retryEl.textContent = `Attempt ${attemptCount} — retrying every 8s`;
+    if (labelEl) labelEl.textContent = step.label;
+
+    // Shake the ack banner to demand attention
+    const pulse = document.getElementById('ack-pulse');
+    if (pulse) {
+      pulse.style.animation = 'none';
+      setTimeout(() => { pulse.style.animation = 'ackShake 0.4s ease, ackPulse 1s ease-in-out infinite'; }, 10);
+    }
+  }
+
+  function acknowledgAlert() {
+    if (!alertActive) return;
+    acknowledged = true;
+    clearInterval(escalateInterval);
+
+    const time = new Date().toLocaleTimeString('en-SG', { hour:'2-digit', minute:'2-digit', second:'2-digit' });
+    addNotif('safe', `✅ Alert acknowledged by supervisor at ${time} — response initiated`);
+
+    // Replace ack banner with confirmed strip
+    const banner = document.getElementById('ack-banner');
+    banner.innerHTML = `
+      <div style="background:rgba(46,204,113,0.1);border:1px solid rgba(46,204,113,0.35);border-radius:10px;padding:0.9rem 1.25rem;display:flex;align-items:center;gap:0.75rem;">
+        <span style="font-size:1.2rem;">✅</span>
+        <div>
+          <div style="font-family:var(--mono);font-size:0.68rem;color:var(--safe-grn);letter-spacing:0.08em;">ACKNOWLEDGED</div>
+          <div style="font-size:0.82rem;color:var(--text);margin-top:0.2rem;">Supervisor confirmed at ${time} after ${attemptCount} signal${attemptCount > 1 ? 's' : ''}</div>
+        </div>
+      </div>`;
+
+    // Stop map flashing — keep zone red but steady
+    const zone = document.getElementById('target-zone');
+    zone.style.background = 'rgba(255,75,43,0.2)';
+
+    // Show action panel
+    document.getElementById('action-panel').style.display = 'block';
   }
 
   function markAction(btn, msg) {
@@ -841,19 +927,21 @@
 
   function resetDemo() {
     alertActive = false;
+    acknowledged = false;
+    attemptCount = 0;
     currentTemp = 36.2;
     clearInterval(riseInterval);
+    clearInterval(escalateInterval);
     lastWarnNotif = 0;
 
-    // Reset worker panel
     updateTempDisplay(36.2);
     document.getElementById('heart-rate').textContent = '82';
+
     const btn = document.getElementById('trigger-btn');
     btn.disabled = false;
     btn.style.opacity = '1';
     btn.textContent = '⚠ Simulate Heat Injury Event';
 
-    // Reset map
     const zone = document.getElementById('target-zone');
     zone.style.background = '#1C2220';
     zone.style.border = '1px solid var(--border)';
@@ -861,19 +949,33 @@
     zone.style.fontWeight = 'normal';
     zone.innerHTML = 'Z3 ←';
 
-    // Reset feed
     document.getElementById('notif-feed').innerHTML = '<div style="background:var(--card);border-radius:6px;padding:0.7rem 1rem;font-size:0.8rem;color:var(--muted);font-style:italic;">No active alerts — all workers in safe range</div>';
 
-    // Reset action panel
+    // Rebuild ack banner to original state
+    document.getElementById('ack-banner').style.display = 'none';
+    document.getElementById('ack-banner').innerHTML = `
+      <div id="ack-pulse" style="background:rgba(255,75,43,0.1); border:2px solid var(--heat-red); border-radius:10px; padding:1rem 1.25rem; animation: ackPulse 1s ease-in-out infinite;">
+        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:0.75rem;">
+          <div>
+            <div style="font-family:var(--mono);font-size:0.68rem;color:var(--heat-red);letter-spacing:0.08em;">UNACKNOWLEDGED ALERT</div>
+            <div id="escalation-label" style="font-size:0.85rem;color:var(--text);margin-top:0.3rem;">Sending signal to supervisor...</div>
+            <div id="retry-counter" style="font-family:var(--mono);font-size:0.7rem;color:var(--heat-red);margin-top:0.25rem;">Attempt 1 of ∞ — retrying every 8s</div>
+          </div>
+          <button onclick="acknowledgAlert()" style="background:var(--heat-red);color:#fff;border:none;padding:0.75rem 1.5rem;border-radius:8px;font-family:var(--sans);font-weight:700;font-size:0.9rem;cursor:pointer;white-space:nowrap;flex-shrink:0;">✔ Acknowledge</button>
+        </div>
+      </div>`;
+
     document.getElementById('action-panel').style.display = 'none';
     document.getElementById('reset-btn').style.display = 'none';
     const actionBtns = document.querySelectorAll('#action-panel button');
-    actionBtns.forEach(b => { b.disabled = false; b.style.opacity = '1'; });
+    actionBtns.forEach(b => { b.disabled = false; b.style.opacity = '1'; b.textContent = b.textContent.replace('✓ ', ''); });
   }
 </script>
 
 <style>
   @keyframes slideIn { from { opacity:0; transform:translateY(-8px); } to { opacity:1; transform:translateY(0); } }
+  @keyframes ackPulse { 0%,100% { border-color: var(--heat-red); box-shadow: 0 0 0 0 rgba(255,75,43,0); } 50% { border-color: rgba(255,75,43,0.5); box-shadow: 0 0 0 4px rgba(255,75,43,0.15); } }
+  @keyframes ackShake { 0%,100%{transform:translateX(0)} 20%{transform:translateX(-6px)} 40%{transform:translateX(6px)} 60%{transform:translateX(-4px)} 80%{transform:translateX(4px)} }
   @media (max-width: 768px) {
     #demo .section-inner > div[style*="grid-template-columns: 1fr 1fr"] {
       grid-template-columns: 1fr !important;
